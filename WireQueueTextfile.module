@@ -106,6 +106,7 @@ class WireQueueTextfile extends WireQueueStorageAbstract {
             $line = trim(fgets($fp));
             if(!$line) {
                 fclose($fp);
+                if(0 == $this->itemCount()) return null;
                 return false;
             }
             // we have the first entry, now write all following data into a buffer

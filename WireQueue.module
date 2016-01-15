@@ -724,12 +724,14 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
             }
         }
         if(8 == $action) {
-            $item = $queue->getItem();
-            $res = is_array($item) && count($item) == 1;
-            $entry = date('Y m d - H:i:s') . " getItem = " . ($res ? 'success' : 'failure') . "\n" . ' - ' . implode('|', $item) . "\n\n";
-            $tmp = $this->session->get('wireQueueTest');
-            array_push($tmp, $entry);
-            $this->session->set('wireQueueTest', $tmp);
+            if(0 < $queue->itemCount()) {
+                $item = $queue->getItem();
+                $res = is_array($item);
+                $entry = date('Y m d - H:i:s') . " getItem = " . ($res ? 'success' : 'failure') . "\n" . ' - ' . implode('|', $item) . "\n\n";
+                $tmp = $this->session->get('wireQueueTest');
+                array_push($tmp, $entry);
+                $this->session->set('wireQueueTest', $tmp);
+            }
         }
         if(9 == $action) {
             $this->session->remove('wireQueueTest');
