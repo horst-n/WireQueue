@@ -1,0 +1,139 @@
+<?php
+/**
+*  Module: Wire Queue Storage Textfile
+*  Author: Horst Nogajski, http://nogajski.de/
+*  Date:   11.01.2016
+*
+*  ProcessWire 2.3+
+*  Copyright (C) 2010 by Ryan Cramer
+*  Licensed under GNU/GPL v2, see LICENSE.TXT
+*
+*  http://www.processwire.com
+*  http://www.ryancramer.com
+*/
+
+if(!class_exists('WireQueueStorageAbstract')) {
+    require_once(__DIR__ . '/WireQueueStorageAbstract.php');
+}
+
+class WireQueueTextfile extends WireQueueStorageAbstract {
+
+    public static function getModuleInfo() {
+        self::$moduleInfo = array(
+            'title'   => 'Wire Queue Textfile',
+            'version' => '0.5.0',
+            'author'  => 'Horst Nogajski',
+            'summary' => 'Provide permanent Storage in plain Textfiles. FiFo (First In - First Out)',
+            );
+        return parent::getModuleInfo();
+    }
+
+    public function ___install() {
+        if(!parent::___install()) {
+            return false;
+        }
+        return true;
+    }
+
+    public function ___uninstall() {
+        if(!parent::___uninstall()) {
+            return false;
+        }
+        return true;
+    }
+
+    public function __construct() {
+        // set the flag to true if this module uses files
+        $this->filebased = true;
+        // set the file extension "txt"
+        self::$fileExtension = 'txt';
+        // now call the parent constructor and after that, do other stuff if you need to
+        parent::__construct();
+    }
+
+    public function ready2use() {
+        // nothing to check here for this handler :)
+        return true;
+    }
+
+    public function hookAppendQueueStorageType(HookEvent $event) {
+        if(!$this->ready2use()) return;
+        self::getModuleInfo();
+        $queueTypes = $event->return;
+        $queueTypes[__CLASS__] = array_merge(self::$moduleInfo, array(
+            'type'        => 'textfile',
+            'description' => $this->_('This module uses plain Textfiles as Storage. One entry per line. Entries will be serialized before storing them.'),
+        ));
+        $event->return = $queueTypes;
+        $event->replace = true;
+    }
+
+    public function createStorage() {
+        if(!$this->ready2use()) return false;
+        if(false === ($file = $this->getFilename())) return false;
+        if(file_exists($file)) return false;
+        return (touch($file) && wireChmod($file) ? true : false);
+    }
+
+//    public function removeStorage($archive = false) {
+//        if(!$this->ready2use()) return false;
+//        if(false === ($file = $this->getFilename())) return true;
+//        if($archive) @rename($file, rtrim($file, '.' . self::$fileExtension) . '__' . time() . '.bak');
+//        if(file_exists($file)) @unlink($file);
+//        return !file_exists($file);
+//    }
+
+    public function addItem($arrayData) {
+        if(!$this->_addItem()) return false;
+        if(2 != $this->getState()) return false;
+        if(!$fp = @fopen($this->getFilename(), 'ab')) return false;
+        if(flock($fp, LOCK_EX)) {
+            $data = serialize($arrayData) . "\n";
+            $res = fwrite($fp, $data);
+            fflush($fp);
+            flock($fp, LOCK_UN);
+            fclose($fp);
+            return $res == strlen($data);
+        }
+        return false;
+    }
+
+    public function getItem() {
+        if(!$this->_getItem()) return false;
+        if(2 != $this->getState()) return false;
+        if(!$fp = @fopen($this->getFilename(), 'rb+')) return false;
+        if(flock($fp, LOCK_EX)) {
+            $line = trim(fgets($fp));
+            if(!$line) {
+                fclose($fp);
+                return false;
+            }
+            // we have the first entry, now write all following data into a buffer
+            $fpTmp = @fopen('php://temp/maxmemory:' . intval(1024 * 1024 * 5), 'rb+');
+            while(!feof($fp)) fwrite($fpTmp, fread($fp, 4096));
+            fseek($fp, 0, SEEK_SET);
+            ftruncate($fp, 0);
+            fseek($fpTmp, 0, SEEK_SET);
+            // write back buffer into file
+            while(!feof($fpTmp)) fwrite($fp, fread($fpTmp, 4096));
+            fclose($fpTmp);
+            fflush($fp);
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
+        return unserialize($line);
+    }
+
+    public function itemCount() {
+        if(!$this->_itemCount()) return false;
+        if(2 > $this->getState()) return 0;
+        if(!$fp = @fopen($this->getFilename(), 'rb')) return false;
+        $i = 0;
+        while(!feof($fp)) {
+            if(fgets($fp)) $i++;
+        }
+        fclose($fp);
+        return $i;
+    }
+
+}

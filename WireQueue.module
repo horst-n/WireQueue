@@ -1,0 +1,751 @@
+<?php
+/**
+*  Module: Wire Queue
+*  Author: Horst Nogajski, http://nogajski.de/
+*  Date:   11.01.2016
+*
+*  ProcessWire 2.3+
+*  Copyright (C) 2010 by Ryan Cramer
+*  Licensed under GNU/GPL v2, see LICENSE.TXT
+*
+*  http://www.processwire.com
+*  http://www.ryancramer.com
+*/
+
+class WireQueue extends WireData implements Module, ConfigurableModule {
+
+    const WIRE_QUEUE_STORAGES = 'Wire Queue Storages';
+    const WIRE_QUEUE_TEMPLATE_CHILDREN = 'wire-queue-storage';
+    const WIRE_QUEUE_TEMPLATE_PARENT = 'wire-queue-container';
+    const WIRE_QUEUE_TEMPLATE_TOOLS = 'wire-queue-tools';
+    const WIRE_QUEUE_FIELD = 'wire_queue_type';
+    const WIRE_QUEUE_FIELD2 = 'wire_queue_state';
+    const WIRE_QUEUE_FIELD3 = 'wire_queue_storage_options';
+    const WIRE_QUEUE_ROLE = 'wire-queue-admin';
+
+    private static $pwv = '';
+    private static $pwvRequires = '2.5.0';
+    private $loadedQueues = array();
+    private $queueModuleCount = 0;
+
+    public static function getModuleInfo() {
+        $info = array(
+            'title'    => 'Wire Queue',
+            'version'  => '0.5.0',
+            'author'   => 'Horst Nogajski',
+            'summary'  => 'Provides basic usage of Queues to ProcessWire!',
+            'singular' => false,
+            'autoload' => true,
+            'requires' => 'ProcessWire>=2.5.0, PHP>=5.3.8',
+            'icon'     => 'exchange'
+            );
+        if(version_compare(self::$pwv, self::$pwvRequires, '<')) {
+            unset($info['requires']);
+        }
+        return $info;
+    }
+
+    public function __construct() {
+        self::$pwv = wire('config')->version;
+    }
+
+    public function init() {
+        $this->addHookAfter('Pages::setupNew', $this, 'hookAfterPagesSetupNew');
+        $this->addHookAfter('ProcessPageListRender::getPageLabel', $this, 'hookAfterProcessPageListRenderGetPageLabel');
+    }
+
+    public function ready() {
+        $this->load();
+        $this->addHook('Page::wireQueue', $this, 'hookWireQueue');
+        $this->addHook('Page::queue', $this, 'hookWireQueue');
+        // for everything coming further, we're interested in page editor only:
+        if($this->page->process != 'ProcessPageEdit') return;
+        $id = $this->input->get->id; // try to get the editedPage
+        if(!$id || (!is_int($id) && !is_numeric($id))) return;
+        $this->editedPage = $this->pages->get("id=$id");
+        if(0 == $this->editedPage->id) return;
+        if(self::WIRE_QUEUE_TEMPLATE_CHILDREN != $this->editedPage->template->name) return;
+        $this->addHookAfter('ProcessPageEdit::buildFormContent', $this, 'hookAfterProcessPageEditBuildFormContent');
+        $this->addHookAfter('ProcessPageEdit::processInput', $this, 'hookAfterProcessPageEditProcessInput');
+    }
+
+    public function ___loadQueueStorageModules() {
+        $this->queueModuleCount = 0;
+        $queueTypes = array();
+        return $queueTypes;
+    }
+    protected function load() {
+        $this->loadedQueues = $this->loadQueueStorageModules();
+        $this->queueModuleCount = count($this->loadedQueues);
+    }
+
+    public static function writeModuleConfigData($classname, &$data) {
+        // a wrapper method to write module config data bypassing optional creation of logentries, introduced in PW 2.5.15 (?)
+        $logs = wire('config')->logs;                              // get current log status
+        if(!is_array($logs) && !isset($logs['modules'])) {
+            wire('modules')->saveModuleConfigData($classname, $data);
+            return;
+        }
+        wire('config')->logs = array();                            // switch logging off
+        wire('modules')->saveModuleConfigData($classname, $data);  // save config data
+        wire('config')->logs = $logs;                              // toggle logging back to default
+    }
+
+    public static function getModuleConfigInputfields(array $data) {
+        return wire('modules')->get(__CLASS__)->getForm();
+    }
+
+    private function getForm() {
+        $form = new InputfieldWrapper();
+        // fieldset
+        $fieldset = $this->modules->get('InputfieldFieldset');
+        $fieldset->attr('name+id', 'loadedqueuetypes');
+        $fieldset->label = $this->_('Queue Storages');
+        $fieldset->columnWidth = 100;
+        $fieldset->collapsed = Inputfield::collapsedNo;
+            $this->load();
+            $numStorages = 0;
+            foreach($this->loadedQueues as $class => $info) {
+                $fieldset2 = $this->modules->get('InputfieldFieldset');
+                $fieldset2->attr('name+id', $class);
+                $fieldset2->label = $class;
+                if(isset($info['description'])) $fieldset2->description = htmlspecialchars($info['description'], ENT_QUOTES, 'UTF-8');
+                $fieldset2->columnWidth = 100;
+                $fieldset2->collapsed = Inputfield::collapsedNo;
+                unset($info['type'], $info['description']);
+                $usedQueues = $this->pages->find("template=" . self::WIRE_QUEUE_TEMPLATE_CHILDREN . "," . self::WIRE_QUEUE_FIELD . ".name=" . $class);
+                $numPages = $usedQueues->count();
+                $info2 = array(
+                    'Editlink' => "<a href='" . $this->config->urls->admin . "module/edit?name={$class}'>open module $class for editing</a>",
+                    'Queues in use' => $numPages
+                    );
+                $info = array_merge($info, $info2);
+                if(count($info) > 0) {
+                    $table = $this->modules->get('MarkupAdminDataTable');
+                    $table->setEncodeEntities(false);
+                    $table->setClass('wirequeue-table');
+                    $table->headerRow(array(
+                        $this->_('Name'),
+                        $this->_('Value')
+                    ));
+                    foreach($info as $k => $v) $table->row(array(html_entity_decode(ucwords($k)), html_entity_decode($v)));
+                    $markup = $this->modules->get('InputfieldMarkup');
+                    $markup->set('value', $table->render());
+                    $fieldset2->add($markup);
+                }
+                $numStorages++;
+                $fieldset->add($fieldset2);
+            }
+        $fieldset->description = $numStorages . ' ' . $this->_('Available Queue Storage Types');
+        $form->add($fieldset);
+        return $form;
+    }
+
+
+
+    public function ___install() {
+        try {
+            // ROLES / PERMISSIONS
+            $guest = $this->roles->get('guest');
+            $super = $this->roles->get('superuser');
+            $role = $this->roles->get(self::WIRE_QUEUE_ROLE);
+            if(!$role->id > 0) {
+                $role = $this->roles->add(self::WIRE_QUEUE_ROLE);
+                $this->roles->save($role);
+            }
+            foreach(array('page-view', 'page-edit', 'page-delete', 'page-sort') as $permName) {
+                $perm = $this->permissions->get($permName);
+                if($role->id > 0 && $perm->id > 0 && !$role->hasPermission($perm)) {
+                    $role->addPermission($perm);
+                    $this->roles->save($role);
+                }
+            }
+
+            $groupTag = 'wire-queue';
+            $pageFieldParentPathname = $this->sanitizer->pageName(self::WIRE_QUEUE_STORAGES) . '/';
+
+            // FIELDS
+            $flds = array();
+            // the state field
+            $fieldname = self::WIRE_QUEUE_FIELD2;
+            $cfg = array();
+            $cfg['type'] = 'FieldtypeInteger';
+            $cfg['name'] = $fieldname;
+            $cfg['flags'] = 224;
+            $cfg['viewRoles'] = array($guest->id, $role->id);
+            $cfg['editRoles'] = array($role->id);
+            $cfg['icon'] = 'list-ul';
+            $cfg['label'] = $fieldname;
+            $cfg['description'] = $fieldname;
+            $cfg['notes'] = '';
+            $cfg['collapsed'] = Inputfield::collapsedNoLocked;
+            $cfg['columnWidth'] = 50;
+            $cfg['required'] = 1;
+            $cfg['requiredIf'] = '';
+            $cfg['showIf'] = '';
+            $cfg['defaultValue'] = '';
+            $cfg['inputType'] = 'text';
+            $cfg['max'] = '4';
+            $cfg['min'] = '1';
+            $cfg['zeroNotEmpty'] = 0;
+            $flds[$fieldname] = array('cfg' => $cfg);
+            unset($cfg, $fieldname);
+            // the Pagefield
+            $fieldname = self::WIRE_QUEUE_FIELD;
+            $cfg = array();
+            $cfg['type'] = 'FieldtypePage';
+            $cfg['name'] = $fieldname;
+            $cfg['flags'] = 96;
+            $cfg['viewRoles'] = array($guest->id, $role->id);
+            $cfg['editRoles'] = array($role->id);
+            $cfg['icon'] = 'list-ul';
+            $cfg['label'] = $fieldname;
+            $cfg['description'] = $fieldname;
+            $cfg['notes'] = '';
+            $cfg['collapsed'] = Inputfield::collapsedNo;
+            $cfg['columnWidth'] = 50;
+            $cfg['required'] = 1;
+            $cfg['showIf'] = '';
+            $cfg['defaultValue'] = '';
+            $cfg['derefAsPage'] = 2;
+            $cfg['findPagesCode'] = '';
+            $cfg['findPagesSelector'] = '';
+            $cfg['inputfield'] = 'InputfieldSelect';
+            $cfg['labelFieldFormat'] = '';
+            $cfg['labelFieldName'] = 'title';
+            $cfg['addable'] = 0;
+            $cfg['allowUnpub'] = 0;
+            $cfg['parent_id'] = 0;
+            $flds[$fieldname] = array('cfg' => $cfg);
+            unset($cfg, $fieldname);
+            // An optional ConfigField for StorageTypes that need Configdata, for example DB credentials.
+            // Form of the data and read / parse it needs to be defined / implemented by / from the 3party StorageModule!
+            // This is only for convenience.
+            $fieldname = self::WIRE_QUEUE_FIELD3;
+            $cfg = array();
+            $cfg['type'] = 'FieldtypeTextarea';
+            $cfg['name'] = $fieldname;
+            $cfg['flags'] = 96;
+            $cfg['viewRoles'] = array($role->id);
+            $cfg['editRoles'] = array($role->id);
+            $cfg['icon'] = 'plug';
+            $cfg['label'] = $fieldname;
+            $cfg['description'] = $this->_('If any WireQueue Custom StorageType needs Configuration Data, this field is meant to add those. It is only viewable and accessible for users with role ' . self::WIRE_QUEUE_ROLE);
+            $cfg['notes'] = '';
+            $cfg['collapsed'] = Inputfield::collapsedYes;
+            $cfg['columnWidth'] = 100;
+            $cfg['required'] = 0;
+            $cfg['requiredIf'] = '';
+            $cfg['showIf'] = '';
+            $cfg['defaultValue'] = '';
+            $cfg['stripTags'] = 0;
+            $cfg['placeholder'] = '';
+            $cfg['textformatters'] = '';
+            $cfg['rows'] = 9;
+            $cfg['contentType'] = 0;
+            $cfg['inputfieldClass'] = 'InputfieldTextarea';
+            $flds[$fieldname] = array('cfg' => $cfg);
+            unset($cfg, $fieldname);
+
+            // TEMPLATES
+            $tmplts = array();
+            // the tools template
+            $templatename = self::WIRE_QUEUE_TEMPLATE_TOOLS;
+            $tmplts[$templatename] = array('t' => $this->templates->get("name=" . $templatename));
+            if(!$tmplts[$templatename]['t']) {
+                $fg = new Fieldgroup();
+                $fg->name = $templatename;
+                $fg->add('title');
+                $fg->save();
+                $tmplts[$templatename]['t'] = new Template();
+                $tmplts[$templatename]['t']->name = $templatename;
+                $tmplts[$templatename]['t']->fieldgroup = $fg;
+                $tmplts[$templatename]['t']->noParents = -1;
+                $tmplts[$templatename]['t']->noChangeTemplate = 1;
+                $tmplts[$templatename]['t']->noShortcut = 1;
+                $tmplts[$templatename]['t']->noChangeTemplate = 1;
+                $tmplts[$templatename]['t']->useRoles = 1;
+                $tmplts[$templatename]['t']->noInherit = 1;
+                $tmplts[$templatename]['t']->roles = array($guest->id, $role->id);
+                $tmplts[$templatename]['t']->editRoles = array($role->id);
+                $tmplts[$templatename]['t']->addRoles = array($role->id);
+                $tmplts[$templatename]['t']->createRoles = array($role->id);
+                $tmplts[$templatename]['t']->save();
+                unset($fg);
+            } else {
+                $tmplts[$templatename]['t']->noChangeTemplate = 1;
+                $tmplts[$templatename]['t']->useRoles = 1;
+                $tmplts[$templatename]['t']->noInherit = 1;
+                $tmplts[$templatename]['t']->roles = array($guest->id, $role->id);
+                $tmplts[$templatename]['t']->editRoles = array($role->id);
+                $tmplts[$templatename]['t']->addRoles = array($role->id);
+                $tmplts[$templatename]['t']->createRoles = array($role->id);
+                $tmplts[$templatename]['t']->save();
+            }
+            // the parent template
+            $templatename = self::WIRE_QUEUE_TEMPLATE_PARENT;
+            $tmplts[$templatename] = array('t' => $this->templates->get("name=" . $templatename));
+            if(!$tmplts[$templatename]['t']) {
+                $fg = new Fieldgroup();
+                $fg->name = $templatename;
+                $fg->add('title');
+                $fg->save();
+                $tmplts[$templatename]['t'] = new Template();
+                $tmplts[$templatename]['t']->name = $templatename;
+                $tmplts[$templatename]['t']->fieldgroup = $fg;
+                $tmplts[$templatename]['t']->noParents = -1;
+                $tmplts[$templatename]['t']->noChangeTemplate = 1;
+                $tmplts[$templatename]['t']->noShortcut = 1;
+                $tmplts[$templatename]['t']->noChangeTemplate = 1;
+                $tmplts[$templatename]['t']->useRoles = 1;
+                $tmplts[$templatename]['t']->noInherit = 1;
+                $tmplts[$templatename]['t']->roles = array($guest->id, $role->id);
+                $tmplts[$templatename]['t']->editRoles = array();
+                $tmplts[$templatename]['t']->addRoles = array($role->id);
+                $tmplts[$templatename]['t']->createRoles = array();
+                $tmplts[$templatename]['t']->save();
+                unset($fg);
+            } else {
+                $tmplts[$templatename]['t']->noChangeTemplate = 1;
+                $tmplts[$templatename]['t']->useRoles = 1;
+                $tmplts[$templatename]['t']->noInherit = 1;
+                $tmplts[$templatename]['t']->roles = array($guest->id, $role->id);
+                $tmplts[$templatename]['t']->editRoles = array();
+                $tmplts[$templatename]['t']->addRoles = array($role->id);
+                $tmplts[$templatename]['t']->createRoles = array();
+                $tmplts[$templatename]['t']->save();
+            }
+            // the child template
+            $templatename = self::WIRE_QUEUE_TEMPLATE_CHILDREN;
+            $tmplts[$templatename] = array('t' => $this->templates->get("name=" . $templatename));
+            if(!$tmplts[$templatename]['t']) {
+                $fg = new Fieldgroup();
+                $fg->name = $templatename;
+                $fg->add('title');
+                $fg->save();
+                $tmplts[$templatename]['t'] = new Template();
+                $tmplts[$templatename]['t']->name = $templatename;
+                $tmplts[$templatename]['t']->fieldgroup = $fg;
+                $tmplts[$templatename]['t']->noChildren = 1;
+                $tmplts[$templatename]['t']->noChangeTemplate = 1;
+                $tmplts[$templatename]['t']->useRoles = 1;
+                $tmplts[$templatename]['t']->noInherit = 1;
+                $tmplts[$templatename]['t']->roles = array($guest->id, $role->id);
+                $tmplts[$templatename]['t']->editRoles = array($role->id);
+                $tmplts[$templatename]['t']->addRoles = array();
+                $tmplts[$templatename]['t']->createRoles = array($role->id);
+                $tmplts[$templatename]['t']->save();
+                unset($fg);
+            } else {
+                $tmplts[$templatename]['t']->noChildren = 1;
+                $tmplts[$templatename]['t']->noChangeTemplate = 1;
+                $tmplts[$templatename]['t']->useRoles = 1;
+                $tmplts[$templatename]['t']->noInherit = 1;
+                $tmplts[$templatename]['t']->roles = array($guest->id, $role->id);
+                $tmplts[$templatename]['t']->editRoles = array($role->id);
+                $tmplts[$templatename]['t']->addRoles = array();
+                $tmplts[$templatename]['t']->createRoles = array($role->id);
+                $tmplts[$templatename]['t']->save();
+            }
+            // family settings tools
+            $templatename = self::WIRE_QUEUE_TEMPLATE_TOOLS;
+            $tmplts[$templatename]['t']->parentTemplates = array('admin', 'home', $templatename);
+            $tmplts[$templatename]['t']->childTemplates = array($templatename);
+            $tmplts[$templatename]['t']->tags = $groupTag;
+            $tmplts[$templatename]['t']->icon = 'list-ul';
+            $tmplts[$templatename]['t']->save();
+            // family settings parent
+            $templatename = self::WIRE_QUEUE_TEMPLATE_PARENT;
+            $tmplts[$templatename]['t']->parentTemplates = array('admin', 'home');
+            $tmplts[$templatename]['t']->childTemplates = array(self::WIRE_QUEUE_TEMPLATE_CHILDREN);
+            $tmplts[$templatename]['t']->tags = $groupTag;
+            $tmplts[$templatename]['t']->icon = 'exchange';
+            $tmplts[$templatename]['t']->save();
+            // family settings children
+            $templatename = self::WIRE_QUEUE_TEMPLATE_CHILDREN;
+            $tmplts[$templatename]['t']->parentTemplates = array(self::WIRE_QUEUE_TEMPLATE_PARENT);
+            $tmplts[$templatename]['t']->tags = $groupTag;
+            $tmplts[$templatename]['t']->icon = '';
+            $tmplts[$templatename]['t']->save();
+
+            // PAGES
+            $pgs = array();
+            // container for StorageTypes (tools)
+            $pgs['tools'] = $this->pages->get("parent.id=2, include=hidden, template=" . self::WIRE_QUEUE_TEMPLATE_TOOLS);
+            if(0 == $pgs['tools']->id) {
+                $pgs['tools'] = new Page($tmplts[self::WIRE_QUEUE_TEMPLATE_TOOLS]['t']);
+                $pgs['tools']->parent = $this->pages->get('id=2'); // we hide it under 'Admin'
+                $pgs['tools']->title = self::WIRE_QUEUE_STORAGES;
+                $pgs['tools']->name = rtrim($pageFieldParentPathname, '/');
+                $pgs['tools']->status(Page::statusHidden);
+                $pgs['tools']->save();
+            }
+            $flds[self::WIRE_QUEUE_FIELD]['cfg']['parent_id'] = $pgs['tools']->id;
+            // container for Queues (parent)
+            $pgs['parent'] = $this->pages->get("parent.id=1, include=hidden, template=" . self::WIRE_QUEUE_TEMPLATE_PARENT);
+            if(0 == $pgs['parent']->id) {
+                $pgs['parent'] = new Page($tmplts[self::WIRE_QUEUE_TEMPLATE_PARENT]['t']);
+                $pgs['parent']->parent = $this->pages->get('id=1'); // we put it under 'Home', but user can move it also under 'Admin' if needed!
+                $pgs['parent']->title = 'Wire Queues';
+                $pgs['parent']->status(Page::statusHidden);
+                $pgs['parent']->save();
+            }
+
+            // ADD FIELDS TO CHILDTEMPLATE
+            $fields = $this->fields;
+            $t = $tmplts[self::WIRE_QUEUE_TEMPLATE_CHILDREN]['t'];
+            foreach($flds as $fld) {
+                $cfg = $fld['cfg'];
+                $name = $cfg['name'];
+                $type = $cfg['type'];
+                $useContext = $t->fieldgroup->getFieldContext($fields->$name) ? true : false;
+                if($useContext) { // fetch existing fieldContext from templates fieldgroup
+                    $f = $t->fieldgroup->getFieldContext($fields->$name);
+                } else {
+                    if($fields->$name) {
+                        $f = $fields->$name;  // fetch existing field
+                        if(!$t->fieldgroup->hasField($f)) {
+                            $t->fieldgroup->add($f);
+                            $t->fieldgroup->save();
+                            $t->save();
+                        }
+                        $useContext = true;   // use as fieldContext from template fieldgroup
+                    } else {
+                        $f = new Field();
+                        $f->type = $this->modules->get($type);
+                        $f->name = $name;
+                        $f->save();
+                    }
+                }
+                if($type != $f->type) {
+                    throw new WireException($this->_("Module WireQueue Installation - ERROR: Missmatch with Fieldname / Fieldtype, {$name}: {$f->type} == {$type}"));
+                }
+                if($useContext) {
+                    // force override for contextual use
+                    if(!isset($cfg['label'])) $cfg['label'] = '';
+                    if(!isset($cfg['columnWidth'])) $cfg['columnWidth'] = 100;
+                    if(!isset($cfg['collapsed'])) $cfg['collapsed'] = Inputfield::collapsedNo;
+                    if(!isset($cfg['description'])) $cfg['description'] = '';
+                    if(!isset($cfg['notes'])) $cfg['notes'] = '';
+                    if(!isset($cfg['required'])) $cfg['required'] = 0;
+                }
+                unset($cfg['name'], $cfg['type']);
+                if($useContext) {
+                    // add all attributes to the contextual attribute of the template
+                    $cfg['tags'] = $groupTag;
+                    $t->fieldgroup->setFieldContextArray($f->id, $cfg);
+                    $t->fieldgroup->saveContext();
+                    $t->fieldgroup->save();
+                    $t->save();
+                } else {
+                    // add all attributes to the original field
+                    foreach($cfg as $k => $v) $f->$k = $v;
+                    $f->tags = $groupTag;
+                    $f->save();
+                    $t->fieldgroup->add($f);
+                    $t->fieldgroup->save();
+                    $t->save();
+                }
+            }
+
+        } catch(Exception $e) {
+            $this->error($e->getMessage());
+            return false;
+        }
+    }
+
+    public function ___uninstall() {
+        try {
+            $this->emptyTrash();
+            // parent container page
+            $parentContainer = $this->pages->get("parent.id=1, include=all, template=" . self::WIRE_QUEUE_TEMPLATE_PARENT);
+            if(0 < $parentContainer->id && count($parentContainer->children('include=all')) == 0) {
+                $parentContainer->delete();
+            }
+            $parentContainer = $this->pages->get("parent.id=1, include=all, template=" . self::WIRE_QUEUE_TEMPLATE_PARENT);
+            if(0 == $parentContainer->id) {
+                // if the container page is gone now, we also can delete the templates and fields
+                foreach(array(self::WIRE_QUEUE_TEMPLATE_CHILDREN, self::WIRE_QUEUE_TEMPLATE_PARENT) as $templateName) {
+                    $tmplt = $this->templates->get("name=$templateName");
+                    if($tmplt) {
+                        $fieldgroup = $tmplt->fieldgroup;
+                        $this->templates->delete($tmplt);
+                        if($fieldgroup) $this->fieldgroups->delete($fieldgroup);
+                        foreach(array(self::WIRE_QUEUE_FIELD, self::WIRE_QUEUE_FIELD2, self::WIRE_QUEUE_FIELD3) as $fieldname) {
+                            if($this->fields->$fieldname) {
+                                $this->fields->delete($this->fields->$fieldname);
+                            }
+                        }
+                    }
+                }
+            }
+            // toolsContainer Page(s)
+            $toolsContainer = $this->pages->get("parent.id=2, include=hidden, template=" . self::WIRE_QUEUE_TEMPLATE_TOOLS);
+            if(0 < $toolsContainer->id) {
+                if(0 < $toolsContainer->children('include=all')->count()) {
+                    foreach($toolsContainer->children('include=all') as $child) $child->delete();
+                }
+                if(0 == $toolsContainer->children('include=all')->count()) {
+                    $toolsContainer->delete();
+                }
+            }
+            $toolsContainer = $this->pages->get("parent.id=2, include=hidden, template=" . self::WIRE_QUEUE_TEMPLATE_TOOLS);
+            if(0 == $toolsContainer->id) {
+                $tmplt = $this->templates->get("name=" . self::WIRE_QUEUE_TEMPLATE_TOOLS);
+                if($tmplt) {
+                    $fieldgroup = $tmplt->fieldgroup;
+                    $this->templates->delete($tmplt);
+                    if($fieldgroup) $this->fieldgroups->delete($fieldgroup);
+                }
+            }
+            // roles / permissions
+            $role = $this->roles->get(self::WIRE_QUEUE_ROLE);
+            if(0 < $role->id) $this->roles->delete($role);
+        } catch(Exception $e) {
+            $this->error($e->getMessage());
+            return false;
+        }
+    }
+
+    private function emptyTrash($selector = '') {
+        // remove WireQueuePages from Trash, so that those cannot block deletion of templates and fields
+        $selector = trim($selector);
+        if($selector) $selector = "parent=/trash/, $selector";
+        if('' == $selector) $selector = 'parent=/trash/, include=all, template=' . self::WIRE_QUEUE_TEMPLATE_CHILDREN . '|' . self::WIRE_QUEUE_TEMPLATE_PARENT . '|' . self::WIRE_QUEUE_TEMPLATE_TOOLS;
+        $trashPages = $this->pages->find($selector);
+        foreach($trashPages as $child) $child->delete();
+    }
+
+
+
+    public function hookWireQueue(HookEvent $event) {
+        if(self::WIRE_QUEUE_TEMPLATE_CHILDREN != $event->object->template) return false;
+        $class = $event->object->get(self::WIRE_QUEUE_FIELD)->title;
+        if('wirequeue' != substr(strtolower($class), 0, 9)) return false;
+        if(!$this->modules->isInstalled($class)) return false;
+        $mod = $this->modules->get($class);
+        if(!$mod->ready2use()) return false;
+        $mod->setPageId($event->object->id); // knowing the page-ID is mandatory for the module to work properly!
+        $allData = $this->modules->getModuleConfigData($mod->className());
+        if(!isset($allData[$event->object->id]['assetsPath'])) {  // if it is used / called (the first time) via API only!, we need to define a directory for filebased storage modules
+            $path = $this->config->paths->assets . 'files/' . $event->object->id . '/';
+            $path = DIRECTORY_SEPARATOR == "\\" && substr($path, 1, 1) == ':' ? substr($path, 0, 2) . $this->sanitizer->pagePathName(substr($path, 2) . '/') : $this->sanitizer->pagePathName($path);
+            if(!is_dir($path)) wireMkdir($path);
+            $mod->setAssetsPath($path);
+        }
+        $event->return = $mod;
+        $event->replace = true;
+    }
+
+    public function hookAfterPagesSetupNew(HookEvent $event) {
+        $page = $event->argumentsByName('page');
+        if(self::WIRE_QUEUE_TEMPLATE_CHILDREN != $page->template->name) return;
+        $fieldname = self::WIRE_QUEUE_FIELD2;
+        $page->$fieldname = 1;
+    }
+
+    public function hookAfterProcessPageListRenderGetPageLabel(HookEvent $event) {
+        $page = $event->arguments('page');
+        if(self::WIRE_QUEUE_TEMPLATE_CHILDREN == $page->template->name) {
+            $fieldname = self::WIRE_QUEUE_FIELD2;
+            $iconTpl = '<i class="icon fa fa-fw fa-square-o wqState0"></i>';                                  // new, empty
+            if (2 == $page->$fieldname) $iconTpl = '<i class="icon fa fa-fw fa-toggle-right wqState1"></i>';  // enabled
+            if (3 == $page->$fieldname) $iconTpl = '<i class="icon fa fa-fw fa-pause wqState2"></i>';         // paused
+            if (4 == $page->$fieldname) $iconTpl = '<i class="icon fa fa-fw fa-square wqState3"></i>';        // disabled / archived
+            $numCount = $page->wireQueue()->itemCount();
+            $numCount = false === $numCount ? 'n/a' : $numCount;
+            $span = ' <span class="label_title"> <small>' . $numCount . '</small> </span> ';
+            $event->return = $iconTpl . $span . $event->return;
+        }
+    }
+
+    public function hookAfterProcessPageEditBuildFormContent(HookEvent $event) {
+        $page = $event->object->getPage();
+        if(self::WIRE_QUEUE_TEMPLATE_CHILDREN != $page->template->name) return;
+//        if($page->skipFurtherEditProcessInput) return;
+//        $page->skipFurtherEditProcessInput = true;
+        extract(hn_fuel());
+        $queue = $page->queue();
+        // manipulate Form according to Permissions and Queue-State
+        $form = $event->return;
+        $fieldnameState = self::WIRE_QUEUE_FIELD2;
+        $admin = (bool)$this->user->isSuperuser();
+        if($this->user->hasRole($this->roles->get(self::WIRE_QUEUE_ROLE))) $admin = true;
+        $enabled = $admin && $page->$fieldnameState == 1 ? true : false;
+        foreach($form as $item) {
+            if(self::WIRE_QUEUE_FIELD == $item->name) { // the Pagefield
+                $item->collapsed = ($enabled ? Inputfield::collapsedNo : Inputfield::collapsedNoLocked);
+            } elseif(self::WIRE_QUEUE_FIELD2 == $item->name) { // the state field
+                if(is_object($queue)) {
+                    $item->description = $queue->getStateStr() . " - [{$queue->itemCount()} items pending]";
+                } else {
+                    $item->description = $this->_('new / empty Queue');
+                }
+                $item->collapsed = Inputfield::collapsedNoLocked;
+            } elseif(self::WIRE_QUEUE_FIELD3 == $item->name) { // the optional ConfigTextbox
+                $item->collapsed = ($enabled ? Inputfield::collapsedYes : Inputfield::collapsedYesLocked);
+            }
+        }
+        if(!is_object($queue)) return;
+        if(!$queue->ready2use()) return;
+        $fieldset = $modules->get('InputfieldFieldset');
+        $fieldset->attr('name+id', 'wire_queue_fieldset');
+        $fieldset->label = $this->_('Actions');
+        $fieldset->collapsed = Inputfield::collapsedNo;
+		switch($queue->getState()) {
+			case 1:
+		        $id1 = 'wire_queue_submit_enable';
+		        $value1 = $this->_('Enable Queue');
+		        $id2 = $value2 = '';
+		        break;
+		    case 2:
+		        $id1 = 'wire_queue_submit_pause';
+		        $value1 = $this->_('Pause Queue');
+		        $id2 = 'wire_queue_submit_close';
+		        $value2 = $this->_('Close / Archive Queue');
+		        break;
+		    case 3:
+		        $id1 = 'wire_queue_submit_continue';
+		        $value1 = $this->_('Continue Queue');
+		        $id2 = 'wire_queue_submit_close';
+		        $value2 = $this->_('Close / Archive Queue');
+		        break;
+		    case 4:
+		        $id1 = $value1 = $id2 = $value2 = '';
+		        break;
+		}
+		if($id1) {
+	        $button = $modules->get('InputfieldSubmit');
+	        $button->attr('id+name', $id1);
+	        $button->value = $value1;
+	        $button->addClass('ui-priority');
+	        $fieldset->add($button);
+		}
+		if($id2) {
+	        $button = $modules->get('InputfieldSubmit');
+	        $button->attr('id+name', $id2);
+	        $button->value = $value2;
+	        $button->addClass('ui-priority');
+	        $fieldset->add($button);
+		}
+        $form->add($fieldset);
+
+        $fieldset = $modules->get('InputfieldFieldset');
+        $fieldset->attr('name+id', 'wire_queue_fieldset_test');
+        $fieldset->label = $this->_('Test');
+        if(2 == $queue->getState()) {
+            $button = $modules->get('InputfieldSubmit');
+            $button->attr('id+name', 'wire_queue_submit_test_add');
+            $button->value = $this->_('TEST add Item');
+            $button->addClass('ui-priority-secondary');
+            $fieldset->add($button);
+            $button = $modules->get('InputfieldSubmit');
+            $button->attr('id+name', 'wire_queue_submit_test_get');
+            $button->value = $this->_('TEST get Item');
+            $button->addClass('ui-priority-secondary');
+            $fieldset->add($button);
+        }
+        if($this->session->wireQueueTest) {
+            $tmp = $this->session->get('wireQueueTest');
+            if(is_array($tmp) && 0 < count($tmp)) {
+                $button = $modules->get('InputfieldSubmit');
+                $button->attr('id+name', 'wire_queue_submit_test_close');
+                $button->value = $this->_('delete Testlog');
+                $button->addClass('ui-priority-secondary');
+                $fieldset->add($button);
+                $field = $this->modules->get('InputfieldMarkup');
+                $field->attr('name+id', 'wire_queue_testlog');
+                $field->label = $this->_('Testlog-Entries');
+                $field->collapsed = Inputfield::collapsedNo;
+                $value = implode('', $tmp);
+                $field->attr('value', "<pre style='line-height:20px; font-size:14px'>$value</pre>");
+                $field->columnWidth = 100;
+                $fieldset->add($field);
+                $fieldset->collapsed = Inputfield::collapsedNo;
+            }
+        } else {
+            $fieldset->collapsed = Inputfield::collapsedYes;
+        }
+        $form->add($fieldset);
+    }
+
+    public function hookAfterProcessPageEditProcessInput(HookEvent $event) {
+        $page = $event->object->getPage();
+        if(self::WIRE_QUEUE_TEMPLATE_CHILDREN != $page->template->name) return;
+        if($page->skipFurtherEditProcessInput) return;
+        $page->skipFurtherEditProcessInput = true;
+        $queue = $page->queue();
+        if(!is_object($queue)) return;
+        if(!$queue->ready2use()) return;
+        $action = null;
+        $post = $this->input->post;
+        $fieldnameState = self::WIRE_QUEUE_FIELD2;
+		switch($queue->getState()) {
+			case 1:
+		        if($post->wire_queue_submit_enable) $action = 2;
+		        break;
+		    case 2:
+		        if($post->wire_queue_submit_pause) $action = 3;
+		        if($post->wire_queue_submit_close) $action = 4;
+                if($post->wire_queue_submit_test_add) $action = 7;
+                if($post->wire_queue_submit_test_get) $action = 8;
+                if($post->wire_queue_submit_test_close) $action = 9;
+		        break;
+		    case 3:
+		        if($post->wire_queue_submit_continue) $action = 2;
+		        if($post->wire_queue_submit_close) $action = 4;
+		        break;
+		    case 4:
+		        $valid = array();
+		        break;
+		}
+		if(!$action) return;
+		if(2 == $action && 1 == $queue->getState() && !$queue->createStorage()) {
+			$this->warning($this->_("WireQueue: cannot create storage for {$page->title} ({$queue->className()})"));
+			return;
+		}
+		if(in_array($action, array(2, 3, 4))) {
+            $page->$fieldnameState = $action;
+		    $page->save();
+        }
+        if(7 == $action) {
+            if(is_readable(__DIR__ . '/testdata.inc.php')) {
+                @include(__DIR__ . '/testdata.inc.php');
+                if(is_array($data) && 0 < count($data)) {
+                    $rand = rand(0, count($data));
+                    $item = $data[$rand];
+                    $res = $queue->addItem($item);
+                    $entry = date('Y m d - H:i:s') . " addItem = " . ($res ? 'success' : 'failure') . "\n" . ' - ' . implode('|', $item) . "\n\n";
+                    $tmp = $this->session->get('wireQueueTest');
+                    if(!is_array($tmp)) $tmp = array();
+                    array_push($tmp, $entry);
+                    $this->session->set('wireQueueTest', $tmp);
+                }
+            }
+        }
+        if(8 == $action) {
+            $item = $queue->getItem();
+            $res = is_array($item) && count($item) == 1;
+            $entry = date('Y m d - H:i:s') . " getItem = " . ($res ? 'success' : 'failure') . "\n" . ' - ' . implode('|', $item) . "\n\n";
+            $tmp = $this->session->get('wireQueueTest');
+            array_push($tmp, $entry);
+            $this->session->set('wireQueueTest', $tmp);
+        }
+        if(9 == $action) {
+            $this->session->remove('wireQueueTest');
+        }
+    }
+
+}
+
+
+
+/* hn_fuel */
+if(!function_exists('hn_fuel')) { function hn_fuel($items = array('config')) {
+    $itemsDefault = array('session','pages','users','modules');
+    $items = array_merge($itemsDefault, $items); $a = array();
+    foreach($items as $item) {
+        $a[$item] = wire($item);
+    }
+    return $a;
+}}
