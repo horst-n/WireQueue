@@ -2,7 +2,7 @@
 /**
 *  Module: Wire Queue
 *  Author: Horst Nogajski, http://nogajski.de/
-*  Date:   11.01.2016
+*  Date:   07.02.2016
 *
 *  ProcessWire 2.3+
 *  Copyright (C) 2010 by Ryan Cramer
@@ -33,7 +33,7 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
             'title'    => 'Wire Queue',
             'version'  => '0.5.0',
             'author'   => 'Horst Nogajski',
-            'summary'  => 'Provides basic usage of Queues to ProcessWire!',
+            'summary'  => 'Implements basic usage of Queues into ProcessWire!',
             'singular' => false,
             'autoload' => true,
             'requires' => 'ProcessWire>=2.5.0, PHP>=5.3.8',
@@ -577,7 +577,7 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
                 $item->collapsed = ($enabled ? Inputfield::collapsedNo : Inputfield::collapsedNoLocked);
             } elseif(self::WIRE_QUEUE_FIELD2 == $item->name) { // the state field
                 if(is_object($queue)) {
-                    $item->description = $queue->getStateStr() . " - [{$queue->itemCount()} items pending]";
+                    $item->description = $queue->getStateStr() . ($page->$fieldnameState == 1 ? '' : " - [{$queue->itemCount()} items pending]");
                 } else {
                     $item->description = $this->_('new / empty Queue');
                 }
@@ -592,42 +592,42 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
         $fieldset->attr('name+id', 'wire_queue_fieldset');
         $fieldset->label = $this->_('Actions');
         $fieldset->collapsed = Inputfield::collapsedNo;
-		switch($queue->getState()) {
-			case 1:
-		        $id1 = 'wire_queue_submit_enable';
-		        $value1 = $this->_('Enable Queue');
-		        $id2 = $value2 = '';
-		        break;
-		    case 2:
-		        $id1 = 'wire_queue_submit_pause';
-		        $value1 = $this->_('Pause Queue');
-		        $id2 = 'wire_queue_submit_close';
-		        $value2 = $this->_('Close / Archive Queue');
-		        break;
-		    case 3:
-		        $id1 = 'wire_queue_submit_continue';
-		        $value1 = $this->_('Continue Queue');
-		        $id2 = 'wire_queue_submit_close';
-		        $value2 = $this->_('Close / Archive Queue');
-		        break;
-		    case 4:
-		        $id1 = $value1 = $id2 = $value2 = '';
-		        break;
-		}
-		if($id1) {
-	        $button = $modules->get('InputfieldSubmit');
-	        $button->attr('id+name', $id1);
-	        $button->value = $value1;
-	        $button->addClass('ui-priority');
-	        $fieldset->add($button);
-		}
-		if($id2) {
-	        $button = $modules->get('InputfieldSubmit');
-	        $button->attr('id+name', $id2);
-	        $button->value = $value2;
-	        $button->addClass('ui-priority');
-	        $fieldset->add($button);
-		}
+        switch($queue->getState()) {
+            case 1:
+                $id1 = 'wire_queue_submit_enable';
+                $value1 = $this->_('Enable Queue');
+                $id2 = $value2 = '';
+                break;
+            case 2:
+                $id1 = 'wire_queue_submit_pause';
+                $value1 = $this->_('Pause Queue');
+                $id2 = 'wire_queue_submit_close';
+                $value2 = $this->_('Close / Archive Queue');
+                break;
+            case 3:
+                $id1 = 'wire_queue_submit_continue';
+                $value1 = $this->_('Continue Queue');
+                $id2 = 'wire_queue_submit_close';
+                $value2 = $this->_('Close / Archive Queue');
+                break;
+            case 4:
+                $id1 = $value1 = $id2 = $value2 = '';
+                break;
+        }
+        if($id1) {
+            $button = $modules->get('InputfieldSubmit');
+            $button->attr('id+name', $id1);
+            $button->value = $value1;
+            $button->addClass('ui-priority');
+            $fieldset->add($button);
+        }
+        if($id2) {
+            $button = $modules->get('InputfieldSubmit');
+            $button->attr('id+name', $id2);
+            $button->value = $value2;
+            $button->addClass('ui-priority');
+            $fieldset->add($button);
+        }
         $form->add($fieldset);
 
         $fieldset = $modules->get('InputfieldFieldset');
@@ -646,7 +646,8 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
             $fieldset->add($button);
         }
         if($this->session->wireQueueTest) {
-            $tmp = $this->session->get('wireQueueTest');
+            $tmpAll = $this->session->get('wireQueueTest');
+            $tmp = isset($tmpAll[$queue->getPageId()]) ? $tmpAll[$queue->getPageId()] : null;
             if(is_array($tmp) && 0 < count($tmp)) {
                 $button = $modules->get('InputfieldSubmit');
                 $button->attr('id+name', 'wire_queue_submit_test_close');
@@ -680,33 +681,40 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
         $action = null;
         $post = $this->input->post;
         $fieldnameState = self::WIRE_QUEUE_FIELD2;
-		switch($queue->getState()) {
-			case 1:
-		        if($post->wire_queue_submit_enable) $action = 2;
-		        break;
-		    case 2:
-		        if($post->wire_queue_submit_pause) $action = 3;
-		        if($post->wire_queue_submit_close) $action = 4;
-                if($post->wire_queue_submit_test_add) $action = 7;
-                if($post->wire_queue_submit_test_get) $action = 8;
-                if($post->wire_queue_submit_test_close) $action = 9;
-		        break;
-		    case 3:
-		        if($post->wire_queue_submit_continue) $action = 2;
-		        if($post->wire_queue_submit_close) $action = 4;
-		        break;
-		    case 4:
-		        $valid = array();
-		        break;
-		}
-		if(!$action) return;
-		if(2 == $action && 1 == $queue->getState() && !$queue->createStorage()) {
-			$this->warning($this->_("WireQueue: cannot create storage for {$page->title} ({$queue->className()})"));
-			return;
-		}
-		if(in_array($action, array(2, 3, 4))) {
+        switch($queue->getState()) {
+            case 1:
+                if($post->wire_queue_submit_enable) $action = 2;      // create storage
+                if($post->wire_queue_submit_test_close) $action = 9;  // test delete log
+                break;
+            case 2:
+                if($post->wire_queue_submit_pause) $action = 3;       // pause queue
+                if($post->wire_queue_submit_close) $action = 4;       // close / archive queue
+                if($post->wire_queue_submit_test_add) $action = 7;    // test add
+                if($post->wire_queue_submit_test_get) $action = 8;    // test get
+                if($post->wire_queue_submit_test_close) $action = 9;  // test delete log
+                break;
+            case 3:
+                if($post->wire_queue_submit_continue) $action = 2;    // continue queue
+                if($post->wire_queue_submit_close) $action = 4;       // close / archive queue
+                if($post->wire_queue_submit_test_close) $action = 9;  // test delete log
+                break;
+            case 4:
+                if($post->wire_queue_submit_test_close) $action = 9;  // test delete log
+                $valid = array();
+                break;
+        }
+        if(!$action) return;
+        if(2 == $action && 1 == $queue->getState() && !$queue->createStorage()) {
+            $this->warning(sprintf($this->_("WireQueue: cannot create storage for %s (%s)"), $page->title, $queue->className()));
+            return;
+        }
+        if(4 == $action && (2 == $queue->getState() || 3 == $queue->getState()) && !$queue->archiveStorage()) {
+            $this->warning(sprintf($this->_("WireQueue: cannot archive storage for %s (%s)"), $page->title, $queue->className()));
+            return;
+        }
+        if(in_array($action, array(2, 3, 4))) {
             $page->$fieldnameState = $action;
-		    $page->save();
+            $page->save();
         }
         if(7 == $action) {
             if(is_readable(__DIR__ . '/testdata.inc.php')) {
@@ -718,7 +726,8 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
                     $entry = date('Y m d - H:i:s') . " addItem = " . ($res ? 'success' : 'failure') . "\n" . ' - ' . implode('|', $item) . "\n\n";
                     $tmp = $this->session->get('wireQueueTest');
                     if(!is_array($tmp)) $tmp = array();
-                    array_push($tmp, $entry);
+                    if(!isset($tmp[$page->id])) $tmp[$page->id] = array();
+                    array_push($tmp[$page->id], $entry);
                     $this->session->set('wireQueueTest', $tmp);
                 }
             }
@@ -729,12 +738,24 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
                 $res = is_array($item);
                 $entry = date('Y m d - H:i:s') . " getItem = " . ($res ? 'success' : 'failure') . "\n" . ' - ' . implode('|', $item) . "\n\n";
                 $tmp = $this->session->get('wireQueueTest');
-                array_push($tmp, $entry);
+                if(!is_array($tmp)) $tmp = array();
+                if(!isset($tmp[$page->id])) $tmp[$page->id] = array();
+                array_push($tmp[$page->id], $entry);
                 $this->session->set('wireQueueTest', $tmp);
             }
         }
         if(9 == $action) {
-            $this->session->remove('wireQueueTest');
+            $tmp = $this->session->get('wireQueueTest');
+            if(is_array($tmp)) {
+                if(isset($tmp[$page->id])) {
+                    unset($tmp[$page->id]);
+                }
+                if(0 == count($tmp)) {
+                    $this->session->remove('wireQueueTest');
+                } else {
+                    $this->session->set('wireQueueTest', $tmp);
+                }
+            }
         }
     }
 

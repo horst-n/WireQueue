@@ -2,7 +2,7 @@
 /**
 *  Module:  Wire Queue Storage Abstract
 *  Author:  Horst Nogajski, http://nogajski.de/
-*  Date:    11.01.2016
+*  Date:    07.02.2016
 *  Version: 1.0.0
 *
 *  ProcessWire 2.3+
@@ -13,7 +13,7 @@
 *  http://www.ryancramer.com
 */
 
-abstract class WireQueueStorageAbstract extends WireData implements Module {
+abstract class WireQueueStorage extends WireData implements Module {
 
     // See example 1) at the end of class
     // Check if storage is ready2use and define mandatory and optional information.
@@ -25,9 +25,8 @@ abstract class WireQueueStorageAbstract extends WireData implements Module {
 
     // methods to handle data
     abstract public function createStorage();
-    #abstract public function removeStorage($archive = false);
     abstract public function addItem($arrayData);
-    abstract public function getItem();
+    abstract public function getItem($worker = null);
     abstract public function itemCount();
 
     // additionally copy / embedd following methods and properties into your storage module:
@@ -127,6 +126,16 @@ abstract class WireQueueStorageAbstract extends WireData implements Module {
     }
 
 
+    public function archiveStorage() {
+        if(!$this->ready2use()) return false;
+        if(!$this->filebased) return true;
+        $path = $this->getAssetspath();
+        $src = $path . self::className() . '.' . self::$fileExtension;
+        $dst = $path . self::className() . '.archived.' . self::$fileExtension;
+        return @rename($src, $dst);
+    }
+
+
     protected function getAssetspath() {
         if($this->assetsPath) return $this->assetsPath;
         $allData = $this->modules->getModuleConfigData(self::className());
@@ -136,15 +145,9 @@ abstract class WireQueueStorageAbstract extends WireData implements Module {
         return $this->assetsPath;
     }
 
-    protected function getFilename($basename = null) {
-        if(!$basename) {
-            if($this->fileBasename) {
-               $basename = $this->fileBasename;
-            } else {
-                // create a generic name and store it
-                $this->fileBasename = $basename = self::className() . '.' . self::$fileExtension;
-            }
-        }
+    protected function getFilename() {
+        $archived = 4 == $this->getState() ? '.archived' : '';
+        $basename = self::className() . $archived . '.' . self::$fileExtension;
         $path = $this->getAssetspath();
         return false !== $path ? $path . strtolower($this->sanitizer->filename($basename)) : false;
     }
@@ -171,7 +174,7 @@ abstract class WireQueueStorageAbstract extends WireData implements Module {
         if(!$this->filebased) return true;
         if(false === ($file = $this->getFilename())) return false;
         if($writeAccess && !is_writable($file)) return false;
-        return true;
+        return is_readable($file);
     }
 
 
@@ -256,8 +259,8 @@ abstract class WireQueueStorageAbstract extends WireData implements Module {
     private function emptyTrash($selector = '') {
         // remove WireQueuePages from Trash, so that those cannot block deletion of templates and fields
         $selector = trim($selector);
-         if($selector) $selector = "parent=/trash/, $selector";
-        if('' == $selector) $selector = 'parent=/trash/, include=all, template=' . self::WIRE_QUEUE_TEMPLATE_CHILDREN . '|' . self::WIRE_QUEUE_TEMPLATE_PARENT . '|' . self::WIRE_QUEUE_TEMPLATE_TOOLS;
+        if($selector) $selector = "parent=/trash/, $selector";
+        if('' == $selector) $selector = 'parent=/trash/, include=all, template=' . WireQueue::WIRE_QUEUE_TEMPLATE_CHILDREN . '|' . WireQueue::WIRE_QUEUE_TEMPLATE_PARENT . '|' . WireQueue::WIRE_QUEUE_TEMPLATE_TOOLS;
         $trashPages = $this->pages->find($selector);
         foreach($trashPages as $child) $child->delete();
     }
