@@ -3,7 +3,7 @@
 *  Module:  Wire Queue Storage Abstract
 *  Author:  Horst Nogajski, http://nogajski.de/
 *  Date:    07.02.2016
-*  Version: 1.0.0
+*  Version: 1.0.2
 *
 *  ProcessWire 2.3+
 *  Copyright (C) 2010 by Ryan Cramer

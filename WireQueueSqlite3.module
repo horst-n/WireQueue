@@ -20,7 +20,7 @@ class WireQueueSqlite3 extends WireQueueStorage {
     public static function getModuleInfo() {
         self::$moduleInfo = array(
             'title'   => 'Wire Queue Sqlite3',
-            'version' => '0.1.0',
+            'version' => '0.6.0',
             'author'  => 'Horst Nogajski',
             'summary' => 'Provide permanent Storage in Sqlite Database files. FiFo (First In - First Out)',
             );
@@ -93,7 +93,7 @@ class WireQueueSqlite3 extends WireQueueStorage {
         if(!parent::_getItem()) return false;
         $worker = null === $worker ? 1 : intval($worker);
         $this->initSqliteDB();
-        $data = $this->sqlitedb->getPendingRecord($worker);
+        $data = $this->sqlitedb->getRecordWithState(0, $worker);
         if(is_array($data) && isset($data['data'])) $data['data'] = unserialize($data['data']);
         return $data;
     }
@@ -109,12 +109,14 @@ class WireQueueSqlite3 extends WireQueueStorage {
     }
 
 
+
     // this is for keeping track of optional further processing steps
     public function updateItemState($id, $state, $worker = null) {
         if(!parent::_getItem()) return false;
         $this->initSqliteDB();
         return $this->sqlitedb->updateRowByID($id, $state, $worker, null);
     }
+
 
     // this is for keeping track of optional further processing steps
     public function getItem4FurtherProcessing($state, $worker = null) {
@@ -257,11 +259,6 @@ class WireQueueSqlite3DB {
         $res = $this->db->exec($sql);
         if($doClose) $this->db->close();
         return $res === false ? false : true;
-    }
-
-
-    public function getPendingRecord($worker = 1) {
-        return $this->getRecordWithState(0, $worker);
     }
 
 

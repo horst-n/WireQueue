@@ -19,7 +19,7 @@ class WireQueueTextfile extends WireQueueStorage {
     public static function getModuleInfo() {
         self::$moduleInfo = array(
             'title'   => 'Wire Queue Textfile',
-            'version' => '0.5.0',
+            'version' => '0.6.0',
             'author'  => 'Horst Nogajski',
             'summary' => 'Provide permanent Storage in plain Textfiles. FiFo (First In - First Out)',
             );

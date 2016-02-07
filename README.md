@@ -1,4 +1,4 @@
 # WireQueue
 Implementation of Queues into ProcessWire
 
-read more here: https://processwire.com/talk/topic/11927-wirequeue-needs-testing/
+read more here: https://processwire.com/talk/topic/12151-wire-queue-basic-implementation-of-simple-queues/
