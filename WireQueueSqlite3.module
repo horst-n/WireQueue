@@ -261,22 +261,7 @@ class WireQueueSqlite3DB {
 
 
     public function getPendingRecord($worker = 1) {
-        $doClose = !$this->DB_IS_OPEN;
-        if(!$this->DB_IS_OPEN) {
-            if(!$this->open(SQLITE3_OPEN_READWRITE)) return false;
-        }
-        $sql = "SELECT id,data FROM {$this->TBL_NAME} WHERE state=0 LIMIT 1";
-        $this->db->query($sql, SQLITE3_NUM);
-        $worker = (int)$worker;
-        if(intval($this->db->numrows) == 1) {
-            $record = $this->db->records[0];
-            $res = $this->updateRowByID($record[0], 1, $worker);
-            if($doClose) $this->db->close();
-            $data = array('id' => $record[0], 'data' => $record[1]);
-            return $res ? $data : false;
-        }
-        if($doClose) $this->db->close();
-        return null;
+        return $this->getRecordWithState(0, $worker);
     }
 
 
@@ -285,13 +270,14 @@ class WireQueueSqlite3DB {
         if(!$this->DB_IS_OPEN) {
             if(!$this->open(SQLITE3_OPEN_READWRITE)) return false;
         }
-        $state = (int)$state;
+        $stateGet = (int)$state;
+        $stateSet = $stateGet + 1;
         $worker = (int)$worker;
-        $sql = "SELECT id,data FROM {$this->TBL_NAME} WHERE state=$state LIMIT 1";
+        $sql = "SELECT id,data FROM {$this->TBL_NAME} WHERE state=$stateGet LIMIT 1";
         $this->db->query($sql, SQLITE3_NUM);
         if(intval($this->db->numrows) == 1) {
             $record = $this->db->records[0];
-            $res = $this->updateRowByID($record[0], $state, $worker);
+            $res = $this->updateRowByID($record[0], $stateSet, $worker);
             if($doClose) $this->db->close();
             $data = array('id' => $record[0], 'data' => $record[1]);
             return $res ? $data : false;
