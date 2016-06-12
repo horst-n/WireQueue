@@ -85,6 +85,7 @@ class WireQueueTextfile extends WireQueueStorage {
             fclose($fp);
             return $res == strlen($data);
         }
+        fclose($fp);
         return false;
     }
 
