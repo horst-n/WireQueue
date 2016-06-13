@@ -73,6 +73,42 @@ class WireQueueTextfile extends WireQueueStorage {
         return (touch($file) && wireChmod($file) ? true : false);
     }
 
+    /**
+     * Empties the queue file by truncating it.
+     */
+    public function purgeItems() {
+        $result = false;
+        if(!$this->ready2use()) return false;
+        if(false === ($file = $this->getFilename())) return false;
+        if(!$fp = @fopen($this->getFilename(), 'rb+')) return false;
+        if(flock($fp, LOCK_EX)) {
+            $result = ftruncate($fp, 0);
+            fflush($fp);
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
+        return $result;
+    }
+
+    /**
+     * Tests if the queue has anything in it
+     *
+     * Faster than looking at the return value of itemCount() in conditional statements.
+     */
+    public function isEmpty() {
+        $result = false;
+        if(!$this->ready2use()) return true;
+        if(false === ($file = $this->getFilename())) return true;
+        if(!$fp = @fopen($this->getFilename(), 'rb')) return true;
+        if(flock($fp, LOCK_SH)) {
+            $stats = fstat($fp);
+            if (0 == $stats['size']) $result = true;
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
+        return $result;
+    }
+
     public function addItem($arrayData) {
         if(!$this->_addItem()) return false;
         if(2 != $this->getState()) return false;
@@ -85,6 +121,7 @@ class WireQueueTextfile extends WireQueueStorage {
             fclose($fp);
             return $res == strlen($data);
         }
+        fclose($fp);
         return false;
     }
 
@@ -120,8 +157,11 @@ class WireQueueTextfile extends WireQueueStorage {
         if(2 > $this->getState()) return 0;
         if(!$fp = @fopen($this->getFilename(), 'rb')) return false;
         $i = 0;
-        while(!feof($fp)) {
-            if(fgets($fp)) $i++;
+        if(flock($fp, LOCK_SH)) {
+            while(!feof($fp)) {
+                if(fgets($fp)) $i++;
+            }
+            flock($fp, LOCK_UN);
         }
         fclose($fp);
         return $i;
