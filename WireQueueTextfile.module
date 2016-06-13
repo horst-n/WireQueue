@@ -138,7 +138,7 @@ class WireQueueTextfile extends WireQueueStorage {
         if(2 > $this->getState()) return 0;
         if(!$fp = @fopen($this->getFilename(), 'rb')) return false;
         $i = 0;
-        if(flock($fp, LOCK_EX)) {
+        if(flock($fp, LOCK_SH)) {
             while(!feof($fp)) {
                 if(fgets($fp)) $i++;
             }
