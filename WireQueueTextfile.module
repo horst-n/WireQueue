@@ -90,6 +90,25 @@ class WireQueueTextfile extends WireQueueStorage {
         return $result;
     }
 
+    /**
+     * Tests if the queue has anything in it
+     *
+     * Faster than looking at the return value of itemCount() in conditional statements.
+     */
+    public function isEmpty() {
+        $result = false;
+        if(!$this->ready2use()) return true;
+        if(false === ($file = $this->getFilename())) return true;
+        if(!$fp = @fopen($this->getFilename(), 'rb')) return true;
+        if(flock($fp, LOCK_SH)) {
+            $stats = fstat($fp);
+            if (0 == $stats['size']) $result = true;
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
+        return $result;
+    }
+
     public function addItem($arrayData) {
         if(!$this->_addItem()) return false;
         if(2 != $this->getState()) return false;
