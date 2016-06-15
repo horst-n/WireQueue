@@ -29,6 +29,10 @@ abstract class WireQueueStorage extends WireData implements Module {
     abstract public function getItem($worker = null);
     abstract public function itemCount();
 
+    // Once these are implemented in the SQLite driver, they will be made abstract and the implementation removed from this class.
+    public function isEmpty()    { throw new WireException($this->_("Not yet implemented, compare itemCount() return value with zero")); }
+    public function purgeItems() { throw new WireException($this->_("Not yet implemented, call itemCount() then call getItem() to remove that many items")); }
+
     // additionally copy / embedd following methods and properties into your storage module:
     #  public static function getModuleInfo()  -> see example 6) below
     #  public function __construct()           -> see example 2) below
