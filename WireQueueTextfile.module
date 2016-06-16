@@ -132,6 +132,7 @@ class WireQueueTextfile extends WireQueueStorage {
         if(flock($fp, LOCK_EX)) {
             $line = trim(fgets($fp));
             if(!$line) {
+                flock($fp, LOCK_UN);
                 fclose($fp);
                 if(0 == $this->itemCount()) return null;
                 return false;
