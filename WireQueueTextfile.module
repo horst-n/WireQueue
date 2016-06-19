@@ -174,6 +174,18 @@ class WireQueueTextfile extends WireQueueStorage {
      * If the Queue is empty, the returned array will be empty.
      */
     public function getItems($count, $worker = null) {
-        throw new WireException($this->_("Not implemented"));
+        $result = array();
+
+        // Integrity check the $count parameter
+        $count = (int) $count;
+        if ($count <= 0) {
+            throw new WireException($this->_("\$count must be a positive integer greater or equal to 1"));
+        }
+
+        // Check internal state
+        if(!$this->_getItem()) return false;
+        if(2 != $this->getState()) return false;
+
+        return $result;
     }
 }
