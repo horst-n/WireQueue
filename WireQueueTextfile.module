@@ -168,6 +168,11 @@ class WireQueueTextfile extends WireQueueStorage {
         return $i;
     }
 
+    /**
+     * Returns an array of up to $count items from the queue
+     *
+     * If the Queue is empty, the returned array will be empty.
+     */
     public function getItems($count, $worker = null) {
         throw new WireException($this->_("Not implemented"));
     }
