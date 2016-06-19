@@ -190,6 +190,8 @@ class WireQueueTextfile extends WireQueueStorage {
         // Open and lock the queue file for reading and writing in binary mode
         if(!$fp = @fopen($this->getFilename(), 'rb+')) return false;
         if(flock($fp, LOCK_EX)) {
+
+            // Get up to $count lines from the queue
             while ($count-- && !feof($fp)) {
                 $result[] = unserialize(trim(fgets($fp)));
             }
