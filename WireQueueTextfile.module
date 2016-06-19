@@ -1,8 +1,8 @@
 <?php
 /**
 *  Module: Wire Queue Storage Textfile
-*  Author: Horst Nogajski, http://nogajski.de/
-*  Date:   07.02.2016
+*  Author: Horst Nogajski (http://nogajski.de/) and Netcarver
+*  Date:   2016-06-19
 *
 *  ProcessWire 2.3+
 *  Copyright (C) 2010 by Ryan Cramer
