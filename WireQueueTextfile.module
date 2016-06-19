@@ -169,17 +169,18 @@ class WireQueueTextfile extends WireQueueStorage {
     }
 
     /**
-     * Returns an array of up to $count items from the queue
+     * Returns an array of up to $count items from the queue.
      *
      * If the Queue is empty, the returned array will be empty.
+     * Asking for zero items is ok, that is what you will get.
      */
     public function getItems($count, $worker = null) {
         $result = array();
 
         // Integrity check the $count parameter
         $count = (int) $count;
-        if ($count <= 0) {
-            throw new WireException($this->_("\$count must be a positive integer greater or equal to 1"));
+        if ($count < 0) {
+            throw new WireException($this->_("\$count must be a integer greater or equal to 0"));
         }
 
         // Check internal state
