@@ -99,6 +99,11 @@ class WireQueueSqlite3 extends WireQueueStorage {
     }
 
 
+    public function getItems($count, $worker = null) {
+        throw new WireException($this->_("Not implemented"));
+    }
+
+
     public function itemCount() {
         if(!parent::_itemCount()) return false;
         if(2 > $this->getState()) return 0;
