@@ -1,8 +1,8 @@
 <?php
 /**
 *  Module: Wire Queue Storage Textfile
-*  Author: Horst Nogajski, http://nogajski.de/
-*  Date:   07.02.2016
+*  Author: Horst Nogajski (http://nogajski.de/) and Netcarver
+*  Date:   2016-06-19
 *
 *  ProcessWire 2.3+
 *  Copyright (C) 2010 by Ryan Cramer
@@ -19,8 +19,8 @@ class WireQueueTextfile extends WireQueueStorage {
     public static function getModuleInfo() {
         self::$moduleInfo = array(
             'title'   => 'Wire Queue Textfile',
-            'version' => '0.6.0',
-            'author'  => 'Horst Nogajski',
+            'version' => '0.7.0',
+            'author'  => 'Horst Nogajski, Netcarver',
             'summary' => 'Provide permanent Storage in plain Textfiles. FiFo (First In - First Out)',
             );
         return parent::getModuleInfo();
@@ -168,4 +168,7 @@ class WireQueueTextfile extends WireQueueStorage {
         return $i;
     }
 
+    public function getItems($count, $worker = null) {
+        throw new WireException($this->_("Not implemented"));
+    }
 }

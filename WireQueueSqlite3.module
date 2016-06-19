@@ -20,7 +20,7 @@ class WireQueueSqlite3 extends WireQueueStorage {
     public static function getModuleInfo() {
         self::$moduleInfo = array(
             'title'   => 'Wire Queue Sqlite3',
-            'version' => '0.6.0',
+            'version' => '0.6.1',
             'author'  => 'Horst Nogajski',
             'summary' => 'Provide permanent Storage in Sqlite Database files. FiFo (First In - First Out)',
             );
@@ -99,6 +99,11 @@ class WireQueueSqlite3 extends WireQueueStorage {
     }
 
 
+    public function getItems($count, $worker = null) {
+        throw new WireException($this->_("Not implemented"));
+    }
+
+
     public function itemCount() {
         if(!parent::_itemCount()) return false;
         if(2 > $this->getState()) return 0;
@@ -136,6 +141,23 @@ class WireQueueSqlite3 extends WireQueueStorage {
         if(null != $data) $data = serialize($data);
         return $this->sqlitedb->updateRowByID($id, $state, $worker, $data);
     }
+
+
+    /**
+     * TODO @Horst to provide implementation
+     */
+    public function isEmpty() {
+        throw new WireException($this->_("Not yet implemented, compare itemCount() return value with zero"));
+    }
+
+
+    /**
+     * TODO @Horst to provide implementation
+     */
+    public function purgeItems() {
+        throw new WireException($this->_("Not yet implemented, call itemCount() then call getItem() to remove that many items"));
+    }
+
 
 }
 

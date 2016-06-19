@@ -28,6 +28,9 @@ abstract class WireQueueStorage extends WireData implements Module {
     abstract public function addItem($arrayData);
     abstract public function getItem($worker = null);
     abstract public function itemCount();
+    abstract public function getItems($count, $worker = null);
+    abstract public function isEmpty();
+    abstract public function purgeItems();
 
     // additionally copy / embedd following methods and properties into your storage module:
     #  public static function getModuleInfo()  -> see example 6) below
