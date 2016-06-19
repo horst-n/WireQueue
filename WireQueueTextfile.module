@@ -186,6 +186,33 @@ class WireQueueTextfile extends WireQueueStorage {
         if(!$this->_getItem()) return false;
         if(2 != $this->getState()) return false;
 
+        // Open and lock the queue file for reading and writing in binary mode
+        if(!$fp = @fopen($this->getFilename(), 'rb+')) return false;
+        if(flock($fp, LOCK_EX)) {
+            while ($count-- && !feof($fp)) {
+                $result[] = unserialize(trim(fgets($fp)));
+            }
+            // We have the entries needed, now copy all following queue items into a buffer
+            $fpTmp = @fopen('php://temp/maxmemory:' . intval(1024 * 1024 * 5), 'rb+');
+            while(!feof($fp)) {
+                fwrite($fpTmp, fread($fp, 4096));
+            }
+            fseek($fpTmp, 0, SEEK_SET);
+
+            // Rewind file pointer and truncate the file
+            fseek($fp, 0, SEEK_SET);
+            ftruncate($fp, 0);
+
+            // Write remaining queue items from the buffer into file
+            while(!feof($fpTmp)) {
+                fwrite($fp, fread($fpTmp, 4096));
+            }
+            fclose($fpTmp);
+
+            fflush($fp);
+            flock($fp, LOCK_UN);
+            fclose($fp);
+        }
         return $result;
     }
 }
