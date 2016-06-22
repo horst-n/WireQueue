@@ -23,7 +23,7 @@ class WireQueueRedis extends WireQueueStorage implements ConfigurableModule {
             'title'   => 'Wire Queue Redis',
             'version' => '0.1.0',
             'author'  => 'Netcarver',
-            'summary' => 'Provide Storage in Redis. FiFo (First In - First Out)',
+            'summary' => 'Provide Storage in Redis. First In - First Out. (Uses one Redis list per queue.)',
             );
         return parent::getModuleInfo();
     }
