@@ -166,19 +166,15 @@ class WireQueueRedis extends WireQueueStorage implements ConfigurableModule {
         $defaults  = self::getDefaultConfig();
         $data      = array_merge($defaults, $data);
 
-        $ip_changed   = false;
-        $port_changed = false;
         $new_ip       = $data['redis_server_ip'];
         $new_port     = $data['redis_server_port'];
 
         if (isset($_POST['redis_server_ip']) && $_POST['redis_server_ip'] != $data['redis_server_ip']) {
-            $ip_changed = true;
-            $new_ip     = $_POST['redis_server_ip'];
+            $new_ip = $_POST['redis_server_ip'];
         }
 
         if (isset($_POST['redis_server_port']) && $_POST['redis_server_port'] != $data['redis_server_port']) {
-            $port_changed = true;
-            $new_port     = $_POST['redis_server_port'];
+            $new_port = $_POST['redis_server_port'];
         }
 
         $redis_ok = self::testConnection($new_ip, $new_port);
