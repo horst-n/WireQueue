@@ -166,6 +166,23 @@ class WireQueueRedis extends WireQueueStorage implements ConfigurableModule {
         $defaults  = self::getDefaultConfig();
         $data      = array_merge($defaults, $data);
 
+        $ip_changed   = false;
+        $port_changed = false;
+        $new_ip       = $data['redis_server_ip'];
+        $new_port     = $data['redis_server_port'];
+
+        if (isset($_POST['redis_server_ip']) && $_POST['redis_server_ip'] != $data['redis_server_ip']) {
+            $ip_changed = true;
+            $new_ip     = $_POST['redis_server_ip'];
+        }
+
+        if (isset($_POST['redis_server_port']) && $_POST['redis_server_port'] != $data['redis_server_port']) {
+            $port_changed = true;
+            $new_port     = $_POST['redis_server_port'];
+        }
+
+        $redis_ok = self::testConnection($new_ip, $new_port);
+
         $f = $modules->get('InputfieldText');
         $f->name  = 'redis_server_ip';
         $f->label = __('IP Address of the redis server running the queues');
@@ -182,7 +199,25 @@ class WireQueueRedis extends WireQueueStorage implements ConfigurableModule {
         $f->columnWidth = 50;
         $fields->add($f);
 
+        $f = $modules->get("InputfieldMarkup");
+        $f->label = __("Redis Session Storage Notes.");
+        if ($redis_ok) {
+            $status = __( "Access to a redis server using the above settings was successful.");
+        } else {
+            $status = __( "<strong>WARNING!: Access to a valid redis server is needed, please update the above settings.</strong>");
+        }
+        $f->value = "<p>$status</p>";
+
+        $fields->add($f);
+
         return $fields;
+    }
+
+
+    static protected function testConnection($ip, $port) {
+        $redis = new \Redis();
+        $ok = $redis->pconnect($ip, (int) $port);
+        return $ok;
     }
 
 }
