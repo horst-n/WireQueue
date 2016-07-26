@@ -180,6 +180,14 @@ class WireQueueRedis extends WireQueueStorage implements ConfigurableModule {
 
         $redis_ok = self::testConnection($new_ip, $new_port);
 
+        if (!class_exists('Redis')) {
+            $f = $modules->get('InputfieldMarkup');
+            $f->label = __('Missing php class:');
+            $value = __('This system is missing the needed php class Redis!');
+            $f->value = "<p style='color:red; font-weight:bold'>{$value}</p>";
+            $fields->add($f);
+        }
+
         $f = $modules->get('InputfieldText');
         $f->name  = 'redis_server_ip';
         $f->label = __('IP Address of the redis server running the queues');
