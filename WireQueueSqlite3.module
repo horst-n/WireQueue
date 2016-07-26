@@ -186,6 +186,7 @@ class WireQueueSqlite3DB {
 
 
     public function __construct($dbname, $dbpath) {
+        if(!class_exists('SQLite3')) return;
         $this->dbname = $dbname;
         $this->dbpath = $dbpath;
         $this->DB_FILE = $this->dbpath . $this->dbname;
@@ -205,6 +206,7 @@ class WireQueueSqlite3DB {
 
 
     public function makeNewDB() {
+        if(!class_exists('SQLite3')) return false;
         if(file_exists($this->DB_FILE)) {
             // gute Frage, was nun?
             return false;
