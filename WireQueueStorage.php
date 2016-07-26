@@ -43,6 +43,10 @@ abstract class WireQueueStorage extends WireData implements Module {
 
     public static function getModuleInfo() {
         self::$moduleInfo['title'] = ucwords(trim(str_replace(array('wire', 'queue'), '', strtolower(self::$moduleInfo['title']))));
+        $requirements = 'ProcessWire>=2.5.0, PHP>=5.3.8, WireQueue';
+        if(isset(self::$moduleInfo['requires'])) {
+            $requirements .= ', ' . self::$moduleInfo['requires'];
+        }
         $info = array(
             'title'    => 'Wire Queue ' . self::$moduleInfo['title'],
             'version'  => self::$moduleInfo['version'],
@@ -50,11 +54,11 @@ abstract class WireQueueStorage extends WireData implements Module {
             'summary'  => self::$moduleInfo['summary'],
             'singular' => false,
             'autoload' => true,
-            'requires' => 'ProcessWire>=2.5.0, PHP>=5.3.8, WireQueue',
+            'requires' => $requirements,
             'icon'     => 'exchange'
             );
         if(version_compare(self::$pwv, self::$pwvRequires, '<')) {
-            $info['requires'] = 'WireQueue';
+            $info['requires'] = str_replace('ProcessWire>=2.5.0, PHP>=5.3.8, ', '', $info['requires']);
         }
         return $info;
     }
