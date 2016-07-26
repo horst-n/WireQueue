@@ -644,16 +644,28 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
             $button->value = $this->_('TEST get Item');
             $button->addClass('ui-priority-secondary');
             $fieldset->add($button);
+            $button = $modules->get('InputfieldSubmit');
+            $button->attr('id+name', 'wire_queue_submit_test_get2');
+            $button->value = $this->_('TEST get 2 Items');
+            $button->addClass('ui-priority-secondary');
+            $fieldset->add($button);
         }
         if($this->session->wireQueueTest) {
             $tmpAll = $this->session->get('wireQueueTest');
             $tmp = isset($tmpAll[$queue->getPageId()]) ? $tmpAll[$queue->getPageId()] : null;
             if(is_array($tmp) && 0 < count($tmp)) {
                 $button = $modules->get('InputfieldSubmit');
+                $button->attr('id+name', 'wire_queue_submit_test_purge');
+                $button->value = $this->_('TEST purgeItems');
+                $button->addClass('ui-priority-secondary');
+                $fieldset->add($button);
+
+                $button = $modules->get('InputfieldSubmit');
                 $button->attr('id+name', 'wire_queue_submit_test_close');
                 $button->value = $this->_('delete Testlog');
                 $button->addClass('ui-priority-secondary');
                 $fieldset->add($button);
+
                 $field = $this->modules->get('InputfieldMarkup');
                 $field->attr('name+id', 'wire_queue_testlog');
                 $field->label = $this->_('Testlog-Entries');
@@ -683,19 +695,21 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
         $fieldnameState = self::WIRE_QUEUE_FIELD2;
         switch($queue->getState()) {
             case 1:
-                if($post->wire_queue_submit_enable) $action = 2;      // create storage
+                if($post->wire_queue_submit_enable)     $action = 2;  // create storage
                 if($post->wire_queue_submit_test_close) $action = 9;  // test delete log
                 break;
             case 2:
-                if($post->wire_queue_submit_pause) $action = 3;       // pause queue
-                if($post->wire_queue_submit_close) $action = 4;       // close / archive queue
-                if($post->wire_queue_submit_test_add) $action = 7;    // test add
-                if($post->wire_queue_submit_test_get) $action = 8;    // test get
+                if($post->wire_queue_submit_pause)      $action = 3;  // pause queue
+                if($post->wire_queue_submit_close)      $action = 4;  // close / archive queue
+                if($post->wire_queue_submit_test_purge) $action = 5;  // test purgeItems
+                if($post->wire_queue_submit_test_add)   $action = 6;  #7; // test add
+                if($post->wire_queue_submit_test_get)   $action = 7;  #8; // test get
+                if($post->wire_queue_submit_test_get2)  $action = 8;  // test get2
                 if($post->wire_queue_submit_test_close) $action = 9;  // test delete log
                 break;
             case 3:
-                if($post->wire_queue_submit_continue) $action = 2;    // continue queue
-                if($post->wire_queue_submit_close) $action = 4;       // close / archive queue
+                if($post->wire_queue_submit_continue)   $action = 2;  // continue queue
+                if($post->wire_queue_submit_close)      $action = 4;  // close / archive queue
                 if($post->wire_queue_submit_test_close) $action = 9;  // test delete log
                 break;
             case 4:
@@ -716,7 +730,18 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
             $page->$fieldnameState = $action;
             $page->save();
         }
-        if(7 == $action) {
+        if(5 == $action && 2 == $queue->getState()) {
+            if(0 < $queue->itemCount()) {
+                $res = $queue->purgeItems();
+                $entry = date('Y m d - H:i:s') . " purgeItems = " . ($res ? 'success' : 'failure') . "\n\n";
+                $tmp = $this->session->get('wireQueueTest');
+                if(!is_array($tmp)) $tmp = array();
+                if(!isset($tmp[$page->id])) $tmp[$page->id] = array();
+                array_push($tmp[$page->id], $entry);
+                $this->session->set('wireQueueTest', $tmp);
+            }
+        }
+        if(6 == $action) {
             if(is_readable(__DIR__ . '/testdata.inc.php')) {
                 @include(__DIR__ . '/testdata.inc.php');
                 if(is_array($data) && 0 < count($data)) {
@@ -732,11 +757,26 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
                 }
             }
         }
-        if(8 == $action) {
+        if(7 == $action) {
             if(0 < $queue->itemCount()) {
                 $item = $queue->getItem();
                 $res = is_array($item);
                 $entry = date('Y m d - H:i:s') . " getItem = " . ($res ? 'success' : 'failure') . "\n" . ' - ' . implode('|', $item) . "\n\n";
+                $tmp = $this->session->get('wireQueueTest');
+                if(!is_array($tmp)) $tmp = array();
+                if(!isset($tmp[$page->id])) $tmp[$page->id] = array();
+                array_push($tmp[$page->id], $entry);
+                $this->session->set('wireQueueTest', $tmp);
+            }
+        }
+        if(8 == $action) {
+            if(0 < $queue->itemCount()) {
+                $items = $queue->getItems(2);
+                $entry = date('Y m d - H:i:s') . " getItems(2) = " . (is_array($items) ? 'success' : 'failure') . "\n";
+                foreach($items as $item) {
+                    if(is_array($item)) $entry .= ' - ' . implode('|', $item) . "\n";
+                }
+                $entry .= "\n";
                 $tmp = $this->session->get('wireQueueTest');
                 if(!is_array($tmp)) $tmp = array();
                 if(!isset($tmp[$page->id])) $tmp[$page->id] = array();
