@@ -57,7 +57,8 @@ class WireQueueSqlite3 extends WireQueueStorage {
         if(!$this->ready2use()) return;
         self::getModuleInfo();
         $queueTypes = $event->return;
-        $queueTypes[__CLASS__] = array_merge(self::$moduleInfo, array(
+        $class = str_replace('Processwire\\', '', __CLASS__); // for compatibility PW 2.5 -> PW 3+
+        $queueTypes[$class] = array_merge(self::$moduleInfo, array(
             'type'        => 'sqlite3',
             'description' => $this->_('This module uses Sqlite3 Databasefiles as Storage.'),
         ));

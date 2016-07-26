@@ -55,7 +55,8 @@ class WireQueueRedis extends WireQueueStorage implements ConfigurableModule {
         if(!$this->ready2use()) return;
         self::getModuleInfo();
         $queueTypes = $event->return;
-        $queueTypes[__CLASS__] = array_merge(self::$moduleInfo, array(
+        $class = str_replace('Processwire\\', '', __CLASS__); // for compatibility PW 2.5 -> PW 3+
+        $queueTypes[$class] = array_merge(self::$moduleInfo, array(
             'type'        => 'redis',
             'description' => $this->_('This module uses redis as Storage. The Redis list data structure will be used. Entries will be serialized before storing them.'),
         ));
