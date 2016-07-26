@@ -211,6 +211,7 @@ class WireQueueRedis extends WireQueueStorage implements ConfigurableModule {
 
 
     static protected function testConnection($ip, $port) {
+        if(!class_exists('Redis')) return false;
         $redis = new \Redis();
         $ok = $redis->pconnect($ip, (int) $port);
         return $ok;
