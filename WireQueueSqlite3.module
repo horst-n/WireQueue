@@ -83,7 +83,7 @@ class WireQueueSqlite3 extends WireQueueStorage {
 
 
     public function addItem($arrayData) {
-        if(!parent::_addItem()) return false;
+        if(!$this->_addItem()) return false;
         $data = serialize($arrayData);
         $this->initSqliteDB();
         return $this->sqlitedb->insertRow($data);
@@ -91,7 +91,8 @@ class WireQueueSqlite3 extends WireQueueStorage {
 
 
     public function getItem($worker = null) {
-        if(!parent::_getItem()) return false;
+        if(!$this->_getItem()) return false;
+        if(2 != $this->getState()) return false;
         $worker = null === $worker ? 1 : intval($worker);
         $this->initSqliteDB();
         $data = $this->sqlitedb->getRecordWithState(0, $worker);
@@ -101,24 +102,41 @@ class WireQueueSqlite3 extends WireQueueStorage {
 
 
     public function getItems($count, $worker = null) {
-        throw new WireException($this->_("Not implemented"));
+        if(!$this->_getItem()) return false;
+        if(2 != $this->getState()) return false;
+        $results = array();
+        while($count--) {
+            $res = $this->getItem($worker);
+            if(is_array($res)) $results[] = $res;
+        }
+        return $results;
     }
 
 
     public function itemCount() {
-        if(!parent::_itemCount()) return false;
+        if(!$this->_itemCount()) return false;
         if(2 > $this->getState()) return 0;
         // returns the num count of records currently in the queue
         $this->initSqliteDB();
-        $res = $this->sqlitedb->getCountRecipients();
-        return $res;
+        return $this->sqlitedb->getRecordsCount();
     }
 
+
+    public function isEmpty() {
+        return (0 === $this->itemCount());
+    }
+
+
+    public function purgeItems() {
+        if(!$this->ready2use()) return false;
+        $this->initSqliteDB();
+        return $this->sqlitedb->purgeAllPendingRecords();
+    }
 
 
     // this is for keeping track of optional further processing steps
     public function updateItemState($id, $state, $worker = null) {
-        if(!parent::_getItem()) return false;
+        if(!$this->_getItem()) return false;
         $this->initSqliteDB();
         return $this->sqlitedb->updateRowByID($id, $state, $worker, null);
     }
@@ -142,23 +160,6 @@ class WireQueueSqlite3 extends WireQueueStorage {
         if(null != $data) $data = serialize($data);
         return $this->sqlitedb->updateRowByID($id, $state, $worker, $data);
     }
-
-
-    /**
-     * TODO @Horst to provide implementation
-     */
-    public function isEmpty() {
-        throw new WireException($this->_("Not yet implemented, compare itemCount() return value with zero"));
-    }
-
-
-    /**
-     * TODO @Horst to provide implementation
-     */
-    public function purgeItems() {
-        throw new WireException($this->_("Not yet implemented, call itemCount() then call getItem() to remove that many items"));
-    }
-
 
 }
 
@@ -287,6 +288,20 @@ class WireQueueSqlite3DB {
     }
 
 
+    public function purgeAllPendingRecords() {
+        $doClose = !$this->DB_IS_OPEN;
+        if(!$this->DB_IS_OPEN) {
+            if(!$this->open(SQLITE3_OPEN_READWRITE)) return false;
+        }
+        $state = -1;
+        $worker = 0;
+        $sql = "UPDATE " . $this->TBL_NAME . " SET state=$state, worker=$worker WHERE state=0";
+        $res = $this->db->exec($sql);
+        if($doClose) $this->db->close();
+        return $res === false ? false : true;
+    }
+
+
     public function getRecordWithState($state, $worker = 1) {
         $doClose = !$this->DB_IS_OPEN;
         if(!$this->DB_IS_OPEN) {
@@ -309,7 +324,7 @@ class WireQueueSqlite3DB {
     }
 
 
-    public function getCountRecipients($onlyPending = true) {
+    public function getRecordsCount($onlyPending = true) {
         $doClose = !$this->DB_IS_OPEN;
         if(!$this->DB_IS_OPEN) {
             if(!$this->open(SQLITE3_OPEN_READONLY)) return false;
