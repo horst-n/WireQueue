@@ -639,14 +639,22 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
             $button->value = $this->_('TEST add Item');
             $button->addClass('ui-priority-secondary');
             $fieldset->add($button);
+
             $button = $modules->get('InputfieldSubmit');
             $button->attr('id+name', 'wire_queue_submit_test_get');
             $button->value = $this->_('TEST get Item');
             $button->addClass('ui-priority-secondary');
             $fieldset->add($button);
+
             $button = $modules->get('InputfieldSubmit');
             $button->attr('id+name', 'wire_queue_submit_test_get2');
             $button->value = $this->_('TEST get 2 Items');
+            $button->addClass('ui-priority-secondary');
+            $fieldset->add($button);
+
+            $button = $modules->get('InputfieldSubmit');
+            $button->attr('id+name', 'wire_queue_submit_test_purge');
+            $button->value = $this->_('TEST purgeItems');
             $button->addClass('ui-priority-secondary');
             $fieldset->add($button);
         }
@@ -654,12 +662,6 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
             $tmpAll = $this->session->get('wireQueueTest');
             $tmp = isset($tmpAll[$queue->getPageId()]) ? $tmpAll[$queue->getPageId()] : null;
             if(is_array($tmp) && 0 < count($tmp)) {
-                $button = $modules->get('InputfieldSubmit');
-                $button->attr('id+name', 'wire_queue_submit_test_purge');
-                $button->value = $this->_('TEST purgeItems');
-                $button->addClass('ui-priority-secondary');
-                $fieldset->add($button);
-
                 $button = $modules->get('InputfieldSubmit');
                 $button->attr('id+name', 'wire_queue_submit_test_close');
                 $button->value = $this->_('delete Testlog');
