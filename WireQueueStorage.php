@@ -5,7 +5,7 @@
 *  Date:    07.02.2016
 *  Version: 1.0.2
 *
-*  ProcessWire 2.3+
+*  ProcessWire 2.5+
 *  Copyright (C) 2010 by Ryan Cramer
 *  Licensed under GNU/GPL v2, see LICENSE.TXT
 *
@@ -43,7 +43,7 @@ abstract class WireQueueStorage extends WireData implements Module {
 
     public static function getModuleInfo() {
         self::$moduleInfo['title'] = ucwords(trim(str_replace(array('wire', 'queue'), '', strtolower(self::$moduleInfo['title']))));
-        $requirements = 'ProcessWire>=2.5.0, PHP>=5.3.8, WireQueue';
+        $requirements = version_compare(self::$pwv, self::$pwvRequires, '<') ? 'WireQueue' : 'ProcessWire>=2.5.0, PHP>=5.3.8, WireQueue';
         if(isset(self::$moduleInfo['requires'])) {
             $requirements .= ', ' . self::$moduleInfo['requires'];
         }
@@ -57,9 +57,6 @@ abstract class WireQueueStorage extends WireData implements Module {
             'requires' => $requirements,
             'icon'     => 'exchange'
             );
-        if(version_compare(self::$pwv, self::$pwvRequires, '<')) {
-            $info['requires'] = str_replace('ProcessWire>=2.5.0, PHP>=5.3.8, ', '', $info['requires']);
-        }
         return $info;
     }
 

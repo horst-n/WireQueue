@@ -4,7 +4,7 @@
 *  Author: Horst Nogajski, http://nogajski.de/
 *  Date:   07.02.2016
 *
-*  ProcessWire 2.3+
+*  ProcessWire 2.5+
 *  Copyright (C) 2010 by Ryan Cramer
 *  Licensed under GNU/GPL v2, see LICENSE.TXT
 *
@@ -31,7 +31,7 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
     public static function getModuleInfo() {
         $info = array(
             'title'    => 'Wire Queue',
-            'version'  => '0.7.0',
+            'version'  => '0.8.0',
             'author'   => 'Horst Nogajski',
             'summary'  => 'Implements basic usage of Queues into ProcessWire!',
             'singular' => false,
