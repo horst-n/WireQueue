@@ -20,7 +20,7 @@ class WireQueueSqlite3 extends WireQueueStorage {
     public static function getModuleInfo() {
         self::$moduleInfo = array(
             'title'   => 'Wire Queue Sqlite3',
-            'version' => '0.6.1',
+            'version' => '1.0.0',
             'author'  => 'Horst Nogajski',
             'summary' => 'Provide permanent Storage in Sqlite Database files. FiFo (First In - First Out)',
             );

@@ -31,7 +31,7 @@ class WireQueue extends WireData implements Module, ConfigurableModule {
     public static function getModuleInfo() {
         $info = array(
             'title'    => 'Wire Queue',
-            'version'  => '0.8.0',
+            'version'  => '1.0.0',
             'author'   => 'Horst Nogajski',
             'summary'  => 'Implements basic usage of Queues into ProcessWire!',
             'singular' => false,

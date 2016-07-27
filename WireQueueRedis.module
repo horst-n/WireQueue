@@ -21,7 +21,7 @@ class WireQueueRedis extends WireQueueStorage implements ConfigurableModule {
     public static function getModuleInfo() {
         self::$moduleInfo = array(
             'title'   => 'Wire Queue Redis',
-            'version' => '0.1.0',
+            'version' => '1.0.0',
             'author'  => 'Netcarver',
             'summary' => 'Provide Storage in Redis. First In - First Out. (Uses one Redis list per queue.)',
             );
